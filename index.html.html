@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rekap Perjalanan Dinas KPU</title>
+    <!-- Memuat Tailwind CSS untuk styling responsif -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Memuat Library jsPDF untuk Export PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        /* Sembunyikan spinner di input number */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+        /* Fokus Merah untuk input */
+        input:focus, textarea:focus, select:focus {
+            border-color: #dc2626; /* Merah 600 */
+            box-shadow: 0 0 0 1px #dc2626;
+            outline: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans min-h-screen">
+
+    <!-- Kontainer Pesan Notifikasi Kustom (Pengganti alert()) -->
+    <div id="message-box" class="fixed top-5 right-5 z-50 p-4 rounded-lg shadow-lg text-white hidden transition transform duration-300">
+        <span id="message-content"></span>
+    </div>
+
+    <!-- Modal Konfirmasi Preview Inputan (Simpan) -->
+    <div id="confirmation-modal-save" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded-xl shadow-3xl w-full max-w-lg mx-4 transform transition-all scale-100 opacity-100">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <h3 class="text-xl font-bold text-red-700">Periksa Kembali Inputan</h3>
+                <button id="close-modal-save-btn" class="text-gray-400 hover:text-gray-700 text-3xl leading-none font-light">&times;</button>
+            </div>
+            <div id="modal-content-save" class="text-gray-700 space-y-2 max-h-96 overflow-y-auto pr-2">
+                <!-- Data preview akan dimuat di sini oleh JS -->
+            </div>
+            <div class="mt-6 flex justify-end space-x-3">
+                <button id="cancel-save-btn" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition">
+                    Batal
+                </button>
+                <button id="confirm-save-btn" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition shadow-md">
+                    Konfirmasi & Simpan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Konfirmasi Hapus (Delete) -->
+    <div id="confirmation-modal-delete" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded-xl shadow-3xl w-full max-w-sm mx-4 transform transition-all scale-100 opacity-100">
+            <div class="text-center">
+                <div class="text-4xl text-red-500 mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </div>
+                <h3 class="text-xl font-bold text-gray-800 mb-2">Konfirmasi Penghapusan</h3>
+                <p class="text-gray-600 mb-5">Anda yakin ingin menghapus data perjalanan dinas ini? Tindakan ini tidak dapat dibatalkan, dan data akan hilang dari rekap bersama.</p>
+            </div>
+            <div class="flex justify-center space-x-3">
+                <button id="cancel-delete-btn" class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition">
+                    Batal
+                </button>
+                <button id="confirm-delete-btn" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition shadow-md">
+                    Hapus Data
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Header Baru dengan Style yang Diperbarui -->
+    <header class="bg-red-700 shadow-xl mb-8 md:mb-10 text-white sticky top-0 z-10">
+        <div class="container mx-auto p-4 md:p-6">
+            <div class="text-center">
+                <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight uppercase">
+                    REKAPITULASI PERJALANAN DINAS KPU KABUPATEN PACITAN
+                </h1>
+                
+                <!-- Menampilkan ID Pengguna dan status mode data -->
+                <div id="user-id-display" class="mt-3 text-xs font-medium bg-red-800 py-1 px-4 rounded-full inline-block shadow-inner">
+                    <!-- Pesan status akan dimuat oleh JavaScript -->
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container mx-auto p-4 md:p-8 pt-0">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Kolom 1: Form Input Perjalanan -->
+            <div class="lg:col-span-1">
+                <div class="bg-white p-8 rounded-xl shadow-2xl border border-gray-100 sticky top-28">
+                    <h2 class="text-2xl font-semibold mb-6 text-red-700">Tambah Perjalanan Baru</h2>
+                    <form id="trip-form" class="space-y-5">
+                        <div>
+                            <label for="nama" class="block text-sm font-medium text-gray-700">Nama Pegawai</label>
+                            <input type="text" id="nama" name="nama" class="mt-1 p-3 w-full border border-gray-300 rounded-lg" required>
+                        </div>
+                        <div>
+                            <label for="tujuan" class="block text-sm font-medium text-gray-700">Kota Tujuan</label>
+                            <input type="text" id="tujuan" name="tujuan" class="mt-1 p-3 w-full border border-gray-300 rounded-lg" required>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="tanggalMulai" class="block text-sm font-medium text-gray-700">Tanggal Mulai</label>
+                                <input type="date" id="tanggalMulai" name="tanggalMulai" class="mt-1 p-3 w-full border border-gray-300 rounded-lg" required>
+                            </div>
+                            <div>
+                                <label for="tanggalSelesai" class="block text-sm font-medium text-gray-700">Tanggal Selesai</label>
+                                <input type="date" id="tanggalSelesai" name="tanggalSelesai" class="mt-1 p-3 w-full border border-gray-300 rounded-lg" required>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label for="tujuanPerjalanan" class="block text-sm font-medium text-gray-700">Keperluan Perjalanan</label>
+                            <textarea id="tujuanPerjalanan" name="tujuanPerjalanan" rows="3" class="mt-1 p-3 w-full border border-gray-300 rounded-lg" placeholder="Contoh: Rapat Koordinasi dengan KPU Provinsi" required></textarea>
+                        </div>
+
+                        <div>
+                            <label for="jenisKendaraan" class="block text-sm font-medium text-gray-700">Jenis Kendaraan</label>
+                            <select id="jenisKendaraan" name="jenisKendaraan" class="mt-1 p-3 w-full border border-gray-300 rounded-lg" required>
+                                <option value="" disabled selected>Pilih Jenis Kendaraan</option>
+                                <option value="Pribadi">Kendaraan Pribadi</option>
+                                <option value="Dinas">Kendaraan Dinas</option>
+                                <option value="Umum-Pesawat">Kendaraan Umum (Pesawat Terbang)</option>
+                                <option value="Umum-Kereta">Kendaraan Umum (Kereta)</option>
+                                <option value="Umum-BusTravel">Kendaraan Umum (Bus/Travel)</option>
+                                <option value="Umum-Kapal">Kendaraan Umum (Kapal Laut)</option>
+                            </select>
+                            <!-- Kontainer detail kendaraan umum (muncul otomatis saat memilih kendaraan umum) -->
+                            <div id="detailKendaraanUmum" class="mt-4 hidden">
+                                <div>
+                                    <label for="nomorTiket" class="block text-sm font-medium text-gray-700">Nomor Tiket</label>
+                                    <input type="text" id="nomorTiket" name="nomorTiket" class="mt-1 p-3 w-full border border-gray-300 rounded-lg" placeholder="Contoh: GA123456">
+                                </div>
+                                <div class="mt-3">
+                                    <label for="tempatDuduk" class="block text-sm font-medium text-gray-700">Tempat Duduk</label>
+                                    <input type="text" id="tempatDuduk" name="tempatDuduk" class="mt-1 p-3 w-full border border-gray-300 rounded-lg" placeholder="Contoh: 12A / Gerbong 3 Kursi 14B">
+                                </div>
+                            </div>
+                        </div>
+
+                        <h3 class="text-xl font-medium pt-3 text-red-600 border-t border-gray-100 pt-4">Rincian Biaya (Angka)</h3>
+                        
+                        <div>
+                            <label for="biayaBBM" class="block text-sm font-medium text-gray-700">Biaya BBM (Rp)</label>
+                            <input type="number" id="biayaBBM" name="biayaBBM" placeholder="500000" class="mt-1 p-3 w-full border border-gray-300 rounded-lg" value="0">
+                        </div>
+
+                        <div>
+                            <label for="biayaTOL" class="block text-sm font-medium text-gray-700">Biaya TOL (Rp)</label>
+                            <input type="number" id="biayaTOL" name="biayaTOL" placeholder="50000" class="mt-1 p-3 w-full border border-gray-300 rounded-lg" value="0">
+                        </div>
+                        
+                        <div>
+                            <label for="akomodasi" class="block text-sm font-medium text-gray-700">Akomodasi (Rp)</label>
+                            <input type="number" id="akomodasi" name="akomodasi" placeholder="750000" class="mt-1 p-3 w-full border border-gray-300 rounded-lg" value="0">
+                        </div>
+                        <div>
+                            <label for="uangMakan" class="block text-sm font-medium text-gray-700">Uang Makan / Harian (Rp)</label>
+                            <input type="number" id="uangMakan" name="uangMakan" placeholder="300000" class="mt-1 p-3 w-full border border-gray-300 rounded-lg" value="0">
+                        </div>
+                        <div>
+                            <label for="transportLokal" class="block text-sm font-medium text-gray-700">Transport Lokal (Rp)</label>
+                            <input type="number" id="transportLokal" name="transportLokal" placeholder="100000" class="mt-1 p-3 w-full border border-gray-300 rounded-lg" value="0">
+                        </div>
+                        
+                        <h3 class="text-xl font-medium pt-3 text-red-600 border-t border-gray-100 pt-4">Dokumen Pendukung</h3>
+
+                        <div>
+                            <label for="nomorSurat" class="block text-sm font-medium text-gray-700">Nomor Surat Tugas</label>
+                            <input type="text" id="nomorSurat" name="nomorSurat" placeholder="Contoh: 123/SPPD/IV/2024" class="mt-1 p-3 w-full border border-gray-300 rounded-lg">
+                        </div>
+
+                        <div>
+                            <label for="nomorNotaDinas" class="block text-sm font-medium text-gray-700">Nomor Nota Dinas</label>
+                            <input type="text" id="nomorNotaDinas" name="nomorNotaDinas" placeholder="Contoh: ND-001/IV/2024" class="mt-1 p-3 w-full border border-gray-300 rounded-lg">
+                        </div>
+
+                        <!-- Upload Nota Dinas ke Google Drive -->
+                        <div class="mt-4">
+                            <label class="block text-sm font-medium text-gray-700">Upload File Nota Dinas (Google Drive)</label>
+                            <div class="mt-2 flex flex-col sm:flex-row gap-2">
+                                <a href="https://drive.google.com/drive/folders/1vhIyR1maXl6LqDrrtTRVixFnQNGM8D3-?usp=drive_link" target="_blank" rel="noopener" class="inline-flex justify-center items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">Buka Folder Drive</a>
+                                <input type="url" id="notaDinasFileUrl" name="notaDinasFileUrl" class="flex-1 p-3 border border-gray-300 rounded-lg" placeholder="Tempel tautan file Google Drive di sini">
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Klik "Buka Folder Drive" untuk mengunggah file, lalu tempel tautan berbagi file di sini.</p>
+                        </div>
+
+                        <button type="submit" class="w-full bg-red-700 text-white py-3 px-4 rounded-lg shadow-lg hover:bg-red-800 transition duration-300 font-semibold mt-6">
+                            Simpan Perjalanan
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Kolom 2: Rekap Perjalanan -->
+            <div class="lg:col-span-2">
+                <div class="bg-white p-8 rounded-xl shadow-2xl border border-gray-100">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-3 sm:space-y-0">
+                        <h2 class="text-2xl font-semibold text-red-700">Rekap Data</h2>
+                        <!-- Kontainer Tombol Export -->
+                        <div class="flex space-x-2">
+                            <!-- Tombol Export PDF -->
+                            <button id="export-pdf-btn" class="bg-red-600 text-white py-2 px-4 rounded-lg shadow-md hover:bg-red-700 transition duration-300 text-sm font-medium">
+                                Export ke PDF
+                            </button>
+                            <!-- Tombol Export CSV -->
+                            <button id="export-csv-btn" class="bg-green-600 text-white py-2 px-4 rounded-lg shadow-md hover:bg-green-700 transition duration-300 text-sm font-medium">
+                                Export ke CSV
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-lg border border-gray-200">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-red-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-bold text-red-700 uppercase tracking-wider">Nama</th>
+                                    <th class="px-6 py-3 text-left text-xs font-bold text-red-700 uppercase tracking-wider">Tujuan</th>
+                                    <th class="px-6 py-3 text-left text-xs font-bold text-red-700 uppercase tracking-wider">Kendaraan</th> 
+                                    <th class="px-6 py-3 text-left text-xs font-bold text-red-700 uppercase tracking-wider">Tanggal</th>
+                                    <th class="px-6 py-3 text-left text-xs font-bold text-red-700 uppercase tracking-wider">Keperluan</th>
+                                    <th class="px-6 py-3 text-left text-xs font-bold text-red-700 uppercase tracking-wider">No. Surat</th>
+                                    <th class="px-6 py-3 text-left text-xs font-bold text-red-700 uppercase tracking-wider">No. Nota Dinas</th>
+                                    <th class="px-6 py-3 text-right text-xs font-bold text-red-700 uppercase tracking-wider">Total Biaya</th>
+                                    <th class="px-6 py-3 text-center text-xs font-bold text-red-700 uppercase tracking-wider">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trip-list-body" class="bg-white divide-y divide-gray-100">
+                                <!-- Data akan dimuat di sini oleh JavaScript -->
+                                <tr>
+                                    <!-- Colspan 9 -->
+                                    <td colspan="9" class="px-6 py-4 text-center text-gray-500">Memuat data...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+    <!-- Modul-modul Firebase -->
+    <script type="module">
+        // Impor fungsi-fungsi yang diperlukan dari Firebase SDK
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            signInWithCustomToken, 
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            doc, 
+            addDoc, 
+            deleteDoc, 
+            onSnapshot, 
+            collection, 
+            setLogLevel
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Variabel Global dan Konfigurasi Firebase ---
+
+        // (WAJIB) Mengambil konfigurasi dari lingkungan Canvas
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        let firebaseConfig = {};
+        try {
+            firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        } catch (e) {
+            console.warn('Firebase config tidak tersedia atau tidak valid. Melanjutkan tanpa Firebase.');
+        }
+        
+        // Inisialisasi Firebase (aman)
+        let app = null, db = null, auth = null;
+        try {
+            if (firebaseConfig && firebaseConfig.apiKey) {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+            } else {
+                console.warn('Lewati inisialisasi Firebase: konfigurasi tidak lengkap.');
+            }
+        } catch (e) {
+            console.warn('Inisialisasi Firebase gagal:', e);
+        }
+
+        // Aktifkan logging untuk debug (opsional)
+        setLogLevel('debug');
+
+        let userId = null;
+        let tripsCollectionRef = null;
+        let allTripsData = []; // Menyimpan semua data perjalanan yang dimuat
+
+        // --- Fungsi Helper ---
+
+        /**
+         * Menampilkan pesan notifikasi kustom.
+         * @param {string} message - Teks pesan.
+         * @param {string} type - 'success' (hijau) atau 'error' (merah).
+         */
+        function showMessage(message, type = 'success') {
+            const messageBox = document.getElementById('message-box');
+            const messageContent = document.getElementById('message-content');
+            
+            messageContent.textContent = message;
+            messageBox.classList.remove('hidden', 'bg-green-600', 'bg-red-700'); 
+
+            if (type === 'success') {
+                messageBox.classList.add('bg-green-600');
+            } else {
+                messageBox.classList.add('bg-red-700');
+            }
+
+            messageBox.classList.remove('hidden');
+
+            // Sembunyikan pesan setelah 3 detik
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, 3000);
+        }
+
+        /**
+         * Memformat angka menjadi format mata uang Rupiah.
+         * @param {number} number - Angka yang akan diformat.
+         * @returns {string} String dalam format Rp.
+         */
+        function formatRupiah(number) {
+            return new Intl.NumberFormat('id-ID', {
+                style: 'currency',
+                currency: 'IDR',
+                minimumFractionDigits: 0
+            }).format(number);
+        }
+
+        // --- Logika Modal Konfirmasi Simpan ---
+
+        /**
+         * Menampilkan modal konfirmasi SIMPAN dengan data perjalanan.
+         * @param {object} tripData - Objek data perjalanan baru.
+         */
+        function showConfirmationSaveModal(tripData) {
+            const modal = document.getElementById('confirmation-modal-save');
+            const content = document.getElementById('modal-content-save');
+            
+            // Membangun HTML untuk preview data
+            content.innerHTML = `
+                <p class="text-base"><strong>Nama Pegawai:</strong> ${tripData.nama}</p>
+                <p class="text-base"><strong>Kota Tujuan:</strong> ${tripData.tujuan}</p>
+                <p class="text-base"><strong>Tanggal:</strong> ${tripData.tanggalMulai} s/d ${tripData.tanggalSelesai}</p>
+                <p class="text-base"><strong>Keperluan:</strong> ${tripData.tujuanPerjalanan}</p>
+                <p class="text-base"><strong>Jenis Kendaraan:</strong> ${tripData.jenisKendaraan}</p>
+                
+                <h4 class="font-semibold mt-4 text-red-600 border-t pt-2">Rincian Biaya:</h4>
+                <ul class="list-disc pl-5 text-sm space-y-1">
+                    <li>BBM: <span class="font-medium">${formatRupiah(tripData.biayaBBM)}</span></li>
+                    <li>TOL: <span class="font-medium">${formatRupiah(tripData.biayaTOL)}</span></li>
+                    <li>Akomodasi: <span class="font-medium">${formatRupiah(tripData.akomodasi)}</span></li>
+                    <li>Uang Makan/Harian: <span class="font-medium">${formatRupiah(tripData.uangMakan)}</span></li>
+                    <li>Transport Lokal: <span class="font-medium">${formatRupiah(tripData.transportLokal)}</span></li>
+                </ul>
+                <h4 class="font-bold text-lg mt-3 border-t pt-3">TOTAL KESELURUHAN: <span class="text-red-700">${formatRupiah(tripData.totalBiaya)}</span></h4>
+                
+                <h4 class="font-semibold mt-4 text-red-600 border-t pt-2">Dokumen Pendukung:</h4>
+                <p class="text-sm"><strong>No. Surat Tugas:</strong> ${tripData.nomorSurat || '-'}</p>
+                <p class="text-sm"><strong>No. Nota Dinas:</strong> ${tripData.nomorNotaDinas || '-'}</p>
+                <p class="text-sm"><strong>File Nota Dinas:</strong> ${tripData.notaDinasFileUrl ? '<a href="' + tripData.notaDinasFileUrl + '" target="_blank" class="text-blue-600 underline">Buka</a>' : '-'}</p>
+                <h4 class="font-semibold mt-4 text-red-600 border-t pt-2">Detail Kendaraan Umum:</h4>
+                <p class="text-sm"><strong>Nomor Tiket:</strong> ${tripData.nomorTiket || '-'}</p>
+                <p class="text-sm"><strong>Tempat Duduk:</strong> ${tripData.tempatDuduk || '-'}</p>
+            `;
+            
+            // Atur event listener untuk tombol Konfirmasi (penting agar event tidak menumpuk)
+            const confirmBtn = document.getElementById('confirm-save-btn');
+            confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+            document.getElementById('confirm-save-btn').addEventListener('click', () => handleConfirmSave(tripData));
+
+            modal.classList.remove('hidden');
+        }
+
+        function hideConfirmationSaveModal() {
+            document.getElementById('confirmation-modal-save').classList.add('hidden');
+        }
+
+        async function saveTripToFirestore(tripData) {
+            try {
+                await addDoc(tripsCollectionRef, tripData);
+                const form = document.getElementById('trip-form');
+                form.reset(); 
+                form.jenisKendaraan.value = ""; // Reset select
+                // Reset input number ke 0
+                document.getElementById('biayaBBM').value = 0;
+                document.getElementById('biayaTOL').value = 0;
+                document.getElementById('akomodasi').value = 0;
+                document.getElementById('uangMakan').value = 0;
+                document.getElementById('transportLokal').value = 0;
+                showMessage('Perjalanan berhasil ditambahkan ke database bersama!', 'success');
+            } catch (error) {
+                console.error("Error adding document: ", error);
+                showMessage('Gagal menambahkan perjalanan.', 'error');
+            }
+        }
+        
+        function handleConfirmSave(tripData) {
+            hideConfirmationSaveModal();
+            saveTripToFirestore(tripData);
+        }
+
+        function setupSaveModalListeners() {
+            const modal = document.getElementById('confirmation-modal-save');
+            
+            // Tombol Tutup (X)
+            document.getElementById('close-modal-save-btn').addEventListener('click', hideConfirmationSaveModal);
+            
+            // Tombol Batal
+            document.getElementById('cancel-save-btn').addEventListener('click', hideConfirmationSaveModal);
+            
+            // Klik di luar modal untuk menutup
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    hideConfirmationSaveModal();
+                }
+            });
+        }
+
+        // --- Logika Modal Konfirmasi Hapus ---
+
+        /**
+         * Menampilkan modal konfirmasi HAPUS.
+         * @param {string} docId - ID dokumen yang akan dihapus.
+         */
+        function showConfirmationDeleteModal(docId) {
+            const modal = document.getElementById('confirmation-modal-delete');
+            
+            // Atur event listener untuk tombol Konfirmasi Hapus (penting agar event tidak menumpuk)
+            const confirmBtn = document.getElementById('confirm-delete-btn');
+            confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+            document.getElementById('confirm-delete-btn').addEventListener('click', () => handleConfirmDelete(docId));
+
+            modal.classList.remove('hidden');
+        }
+
+        function hideConfirmationDeleteModal() {
+            document.getElementById('confirmation-modal-delete').classList.add('hidden');
+        }
+
+        async function handleDelete(docId) {
+            try {
+                // Hapus dokumen dari koleksi publik
+                await deleteDoc(doc(tripsCollectionRef, docId));
+                showMessage('Perjalanan berhasil dihapus dari database bersama.', 'success');
+            } catch (error) {
+                console.error("Error deleting document: ", error);
+                showMessage('Gagal menghapus perjalanan.', 'error');
+            }
+        }
+
+        function handleConfirmDelete(docId) {
+            hideConfirmationDeleteModal();
+            handleDelete(docId);
+        }
+
+        function setupDeleteModalListeners() {
+            const modal = document.getElementById('confirmation-modal-delete');
+            
+            // Tombol Batal Hapus
+            document.getElementById('cancel-delete-btn').addEventListener('click', hideConfirmationDeleteModal);
+            
+            // Klik di luar modal untuk menutup
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    hideConfirmationDeleteModal();
+                }
+            });
+        }
+
+
+        // --- Logika Utama Aplikasi ---
+
+        /**
+         * Menjalankan proses autentikasi Firebase.
+         */
+        async function setupAuth() {
+            try {
+                if (!auth) return; // Tidak ada auth, lewati autentikasi
+                // Gunakan __initial_auth_token jika tersedia, jika tidak, sign in secara anonim.
+                if (typeof __initial_auth_token !== 'undefined') {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Kesalahan saat autentikasi:", error);
+                showMessage("Gagal terhubung ke layanan.", "error");
+            }
+        }
+
+        /**
+         * Mengatur listener untuk form penambahan perjalanan.
+         */
+        function setupFormListener() {
+            const form = document.getElementById('trip-form');
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                
+                // Ambil semua nilai biaya
+                const biayaBBM = parseFloat(form.biayaBBM.value) || 0;
+                const biayaTOL = parseFloat(form.biayaTOL.value) || 0;
+                const akomodasi = parseFloat(form.akomodasi.value) || 0;
+                const uangMakan = parseFloat(form.uangMakan.value) || 0;
+                const transportLokal = parseFloat(form.transportLokal.value) || 0;
+                
+                // Perhitungan total Biaya 
+                const totalBiaya = biayaBBM + biayaTOL + akomodasi + uangMakan + transportLokal;
+
+                const newTrip = {
+                    nama: form.nama.value,
+                    tujuan: form.tujuan.value,
+                    tanggalMulai: form.tanggalMulai.value,
+                    tanggalSelesai: form.tanggalSelesai.value,
+                    tujuanPerjalanan: form.tujuanPerjalanan.value,
+                    jenisKendaraan: form.jenisKendaraan.value, 
+                    nomorTiket: form.nomorTiket ? form.nomorTiket.value : '',
+                    tempatDuduk: form.tempatDuduk ? form.tempatDuduk.value : '',
+                    nomorSurat: form.nomorSurat.value, 
+                    nomorNotaDinas: form.nomorNotaDinas.value, 
+                    notaDinasFileUrl: form.notaDinasFileUrl ? form.notaDinasFileUrl.value.trim() : '',
+                    biayaBBM: biayaBBM, 
+                    biayaTOL: biayaTOL, 
+                    akomodasi: akomodasi,
+                    uangMakan: uangMakan,
+                    transportLokal: transportLokal,
+                    totalBiaya: totalBiaya,
+                    addedByUserId: userId 
+                };
+
+                // Tampilkan modal konfirmasi Simpan
+                showConfirmationSaveModal(newTrip);
+            });
+        }
+
+        /**
+         * Memuat dan mendengarkan perubahan data perjalanan dari Firestore.
+         */
+        function loadTrips() {
+            // Gunakan onSnapshot untuk data real-time dari koleksi publik
+            onSnapshot(tripsCollectionRef, (snapshot) => {
+                const trips = [];
+                snapshot.forEach((doc) => {
+                    trips.push({ id: doc.id, ...doc.data() });
+                });
+
+                // Simpan data ke variabel global
+                allTripsData = trips;
+
+                // Urutkan data di memory berdasarkan tanggal mulai
+                allTripsData.sort((a, b) => new Date(b.tanggalMulai) - new Date(a.tanggalMulai));
+                
+                renderTrips(allTripsData);
+            });
+        }
+
+        /**
+         * Merender daftar perjalanan ke dalam tabel HTML.
+         * @param {Array} trips - Array objek perjalanan.
+         */
+        function renderTrips(trips) {
+            const listBody = document.getElementById('trip-list-body');
+            listBody.innerHTML = ''; 
+
+            // Colspan 9
+            if (trips.length === 0) {
+                listBody.innerHTML = `<tr><td colspan="9" class="px-6 py-4 text-center text-gray-500">Belum ada data perjalanan dinas yang dibagi bersama.</td></tr>`;
+                return;
+            }
+
+            trips.forEach(trip => {
+                const row = document.createElement('tr');
+                row.classList.add('hover:bg-red-50'); 
+
+                // Sanitasi teks untuk atribut title
+                const keperluanTitle = trip.tujuanPerjalanan.replace(/"/g, '&quot;');
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm font-medium text-gray-900">${trip.nama}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-700">${trip.tujuan}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-700">${trip.jenisKendaraan || '-'}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-700">${trip.tanggalMulai} s/d ${trip.tanggalSelesai}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="text-sm text-gray-700 max-w-xs truncate" title="${keperluanTitle}">${trip.tujuanPerjalanan}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-700">${trip.nomorSurat || '-'}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-700">${trip.nomorNotaDinas || '-'}</div>
+                        ${trip.notaDinasFileUrl ? `<div class="text-xs"><a href="${trip.notaDinasFileUrl}" target="_blank" class="text-blue-600 underline">Lihat Nota</a></div>` : ''}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-right">
+                        <div class="text-sm font-semibold text-red-700">${formatRupiah(trip.totalBiaya)}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                        <button class="delete-btn text-red-600 hover:text-red-800 transition duration-150" data-id="${trip.id}">Hapus</button>
+                    </td>
+                `;
+                listBody.appendChild(row);
+            });
+
+            // Pasang event listener ke tombol hapus
+            attachActionListeners();
+        }
+
+        /**
+         * Memasang event listener untuk semua tombol aksi (hapus, export).
+         */
+        function attachActionListeners() {
+            // Listener Hapus
+            document.querySelectorAll('.delete-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const id = e.target.dataset.id;
+                    // Tampilkan modal konfirmasi Hapus
+                    showConfirmationDeleteModal(id);
+                });
+            });
+
+            // Listener Export PDF
+            document.getElementById('export-pdf-btn').addEventListener('click', exportToPdf);
+
+            // Listener Export CSV
+            document.getElementById('export-csv-btn').addEventListener('click', exportToCsv);
+        }
+        
+        /**
+         * Fungsi untuk mengexport data perjalanan dinas ke format PDF menggunakan jsPDF.
+         */
+        function exportToPdf() {
+            if (allTripsData.length === 0) {
+                showMessage('Tidak ada data untuk diexport.', 'error');
+                return;
+            }
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('l', 'mm', 'a4'); // 'l' = Landscape, A4 paper
+            
+            // Header
+            doc.setFontSize(16);
+            doc.text("Rekap Perjalanan Dinas KPU Kabupaten Pacitan (Data Bersama)", 148.5, 15, null, null, 'center');
+            doc.setFontSize(10);
+            doc.text(`Dicetak pada: ${new Date().toLocaleDateString('id-ID')}`, 148.5, 20, null, null, 'center');
+
+            const tableColumn = ["No.", "Nama", "Tujuan", "Kendaraan", "Tanggal", "Keperluan", "No. Surat", "No. Nota Dinas", "Total Biaya"];
+            const tableRows = [];
+            let grandTotal = 0;
+
+            allTripsData.forEach((trip, index) => {
+                const tripData = [
+                    index + 1,
+                    trip.nama,
+                    trip.tujuan,
+                    trip.jenisKendaraan || '-', 
+                    `${trip.tanggalMulai} s/d ${trip.tanggalSelesai}`,
+                    trip.tujuanPerjalanan,
+                    trip.nomorSurat || '-',
+                    trip.nomorNotaDinas || '-', 
+                    formatRupiah(trip.totalBiaya) 
+                ];
+                tableRows.push(tripData);
+                grandTotal += trip.totalBiaya;
+            });
+
+            // AutoTable Configuration
+            doc.autoTable(tableColumn, tableRows, { 
+                startY: 25,
+                headStyles: { fillColor: [185, 28, 28] }, // Red 700 
+                columnStyles: {
+                    0: { cellWidth: 10 },
+                    8: { halign: 'right' } 
+                },
+                didDrawPage: function(data) {
+                    // Footer (Nomor halaman)
+                    let str = "Halaman " + doc.internal.getNumberOfPages();
+                    doc.setFontSize(10);
+                    let pageSize = doc.internal.pageSize;
+                    let pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
+                    doc.text(str, data.settings.margin.left, pageHeight - 10);
+                }
+            });
+
+            // Footer / Grand Total
+            let finalY = doc.autoTable.previous.finalY || 25; 
+            doc.setFontSize(12);
+            doc.setFont(undefined, 'bold');
+            doc.text(`GRAND TOTAL BIAYA: ${formatRupiah(grandTotal)}`, doc.internal.pageSize.width - 15, finalY + 10, null, null, 'right');
+
+            doc.save('Rekap_Perjalanan_Dinas_KPU_Pacitan_Bersama.pdf');
+            showMessage('Data berhasil diexport ke PDF!', 'success');
+        }
+
+        /**
+         * Fungsi untuk mengexport data perjalanan dinas ke format CSV.
+         */
+        function exportToCsv() {
+            if (allTripsData.length === 0) {
+                showMessage('Tidak ada data untuk diexport.', 'error');
+                return;
+            }
+
+            // Headers CSV (Mencakup semua rincian biaya)
+            const headers = [
+                "Nama", "Tujuan", "Tanggal Mulai", "Tanggal Selesai", "Keperluan Perjalanan", 
+                "Jenis Kendaraan", "No. Surat Tugas", "No. Nota Dinas", "Link Nota Dinas", "Nomor Tiket", "Tempat Duduk",
+                "Biaya BBM (Rp)", "Biaya TOL (Rp)", "Akomodasi (Rp)", "Uang Makan (Rp)", 
+                "Transport Lokal (Rp)", "Total Biaya (Rp)"
+            ];
+
+            const csvRows = [];
+            csvRows.push(headers.join(';')); // Header baris pertama
+
+            allTripsData.forEach(trip => {
+                const values = [
+                    trip.nama,
+                    trip.tujuan,
+                    trip.tanggalMulai,
+                    trip.tanggalSelesai,
+                    // Bersihkan koma dan kutipan dalam keperluan agar tidak merusak format CSV
+                    `"${trip.tujuanPerjalanan.replace(/"/g, '""')}"`, 
+                    trip.jenisKendaraan || '-', 
+                    trip.nomorSurat || '-',
+                    trip.nomorNotaDinas || '-',
+                    trip.notaDinasFileUrl || '-',
+                    trip.nomorTiket || '-',
+                    trip.tempatDuduk || '-',
+                    // Biaya harus dalam bentuk angka murni
+                    trip.biayaBBM, 
+                    trip.biayaTOL, 
+                    trip.akomodasi, 
+                    trip.uangMakan, 
+                    trip.transportLokal,
+                    trip.totalBiaya
+                ];
+                csvRows.push(values.join(';')); // Pisahkan data dengan semicolon (populer di Excel Indonesia)
+            });
+
+            const csvString = csvRows.join('\n');
+            
+            // Tambahkan BOM untuk memastikan Excel membaca karakter khusus (UTF-8) dengan benar
+            const BOM = "\uFEFF"; 
+            const blob = new Blob([BOM + csvString], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'Rekap_Perjalanan_Dinas_KPU_Pacitan_Bersama.csv';
+            
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showMessage('Data berhasil diexport ke CSV!', 'success');
+        }
+
+
+        // --- Titik Masuk Aplikasi ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            await setupAuth();
+            
+            // Atur listener untuk modal Simpan dan Hapus
+            setupSaveModalListeners();
+            setupDeleteModalListeners();
+
+            // Dengarkan perubahan status auth (aman jika auth tidak tersedia)
+            if (auth) {
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        // *** PESAN PENTING: Data Bersama/Publik ***
+                        document.getElementById('user-id-display').innerHTML = `ID Pengguna Anda: <strong>${userId}</strong>. Data ini <strong>PUBLIK</strong>.`;
+                        
+                        // *** Path Kolaborasi Publik ***
+                        tripsCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'perjalanan_dinas');
+
+                        // Mulai memuat data dan mengatur listener form
+                        setupFormListener();
+                        attachActionListeners(); 
+                        loadTrips();
+                    } else {
+                        userId = null;
+                        document.getElementById('user-id-display').textContent = 'Menunggu autentikasi...';
+                        // Tampilkan pesan loading/login
+                        document.getElementById('trip-list-body').innerHTML = `<tr><td colspan="9" class="px-6 py-4 text-center text-gray-500">Menunggu autentikasi...</td></tr>`;
+                    }
+                });
+            } else {
+                // Mode offline: tetap memungkinkan input lokal & UI dropdown berjalan
+                userId = null;
+                document.getElementById('user-id-display').textContent = 'Mode offline: Firebase tidak aktif';
+                setupFormListener();
+                attachActionListeners();
+                document.getElementById('trip-list-body').innerHTML = `<tr><td colspan="9" class="px-6 py-4 text-center text-gray-500">Firebase nonaktif. Rekap tidak dimuat.</td></tr>`;
+            }
+            
+            // Pastikan nilai default input number adalah 0 saat load
+            document.getElementById('biayaBBM').value = 0;
+            document.getElementById('biayaTOL').value = 0;
+            document.getElementById('akomodasi').value = 0;
+            document.getElementById('uangMakan').value = 0;
+            document.getElementById('transportLokal').value = 0;
+
+            // Logika tombol Pilih Kendaraan
+            const jenisKendaraanSelect = document.getElementById('jenisKendaraan');
+            const detailKendaraanUmum = document.getElementById('detailKendaraanUmum');
+
+            function isKendaraanUmum(value) {
+                return [
+                    'Umum-Pesawat',
+                    'Umum-Kereta',
+                    'Umum-BusTravel',
+                    'Umum-Kapal'
+                ].includes(value);
+            }
+            function isTanpaTempatDuduk(value) {
+                // Khusus permintaan: sembunyikan input tempat duduk untuk Bus/Travel umum
+                return value === 'Umum-BusTravel';
+            }
+
+            
+            // Tampilkan/sembunyikan detail otomatis sesuai pilihan kendaraan
+            function updateDetailBySelection() {
+                if (!jenisKendaraanSelect || !detailKendaraanUmum) return;
+                const val = jenisKendaraanSelect.value;
+                try { console.debug('Jenis kendaraan dipilih:', val); } catch (e) {}
+                const nomorTiket = document.getElementById('nomorTiket');
+                const tempatDuduk = document.getElementById('tempatDuduk');
+                const tempatDudukWrapper = tempatDuduk ? tempatDuduk.closest('div') : null;
+                if (isKendaraanUmum(val)) {
+                    detailKendaraanUmum.classList.remove('hidden');
+                    detailKendaraanUmum.classList.add('block');
+                    // Sembunyikan input tempat duduk jika Bus/Travel
+                    if (tempatDudukWrapper) {
+                        if (isTanpaTempatDuduk(val)) {
+                            tempatDudukWrapper.classList.add('hidden');
+                            tempatDudukWrapper.classList.remove('block');
+                            if (tempatDuduk) tempatDuduk.value = '';
+                        } else {
+                            tempatDudukWrapper.classList.remove('hidden');
+                            tempatDudukWrapper.classList.add('block');
+                        }
+                    }
+                } else {
+                    detailKendaraanUmum.classList.add('hidden');
+                    detailKendaraanUmum.classList.remove('block');
+                    if (nomorTiket) nomorTiket.value = '';
+                    if (tempatDuduk) tempatDuduk.value = '';
+                    if (tempatDudukWrapper) {
+                        tempatDudukWrapper.classList.remove('block');
+                        tempatDudukWrapper.classList.add('hidden');
+                    }
+                }
+            }
+            jenisKendaraanSelect.addEventListener('change', updateDetailBySelection);
+            jenisKendaraanSelect.addEventListener('input', updateDetailBySelection);
+            // Sinkronkan keadaan saat pertama kali dimuat
+            updateDetailBySelection();
+        });
+
+    </script>
+</body>
+</html>
